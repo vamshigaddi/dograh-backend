@@ -1,6 +1,14 @@
 # Production Docker Compose for GCP VM Deployment
 # Optimized for Supabase Cloud (Postgres/Auth) + GCS (Storage) + External Frontend (Vercel)
 
+version: "3.8"
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   dograh-init:
     image: bash:5.2
