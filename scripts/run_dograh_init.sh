@@ -17,6 +17,8 @@ DOGRAH_DEPLOY_PROJECT_DIR="$WORKSPACE_DIR"
 mkdir -p "$NGINX_OUTPUT_DIR" "$COTURN_OUTPUT_DIR"
 
 if [[ "${ENVIRONMENT:-local}" == "production" ]]; then
+    SERVER_IP="${SERVER_IP:-${PUBLIC_HOST:-}}"
+    TURN_SECRET="${TURN_SECRET:-dograh_turn_secret_2026}"
     dograh_validate_remote_runtime_env
     mkdir -p "$CERTS_DIR"
     if [[ ! -f "$CERTS_DIR/local.crt" || ! -f "$CERTS_DIR/local.key" ]]; then
