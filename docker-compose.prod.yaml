@@ -21,6 +21,7 @@ services:
       - nginx-generated:/generated/nginx
       - coturn-generated:/generated/coturn
     command:
+      - bash
       - /workspace/scripts/run_dograh_init.sh
 
   nginx:
