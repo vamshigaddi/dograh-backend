@@ -76,7 +76,7 @@ services:
       - app-network
 
   api:
-    image: ${REGISTRY:-us-central1-docker.pkg.dev/YOUR_PROJECT}/dograh-api:latest
+    image: ${REGISTRY:-dograh}/dograh-api:latest
     build:
       context: .
       dockerfile: api/Dockerfile
