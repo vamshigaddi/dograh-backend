@@ -24,7 +24,7 @@ if [[ "${ENVIRONMENT:-local}" == "production" ]]; then
         SERVER_IP="127.0.0.1"
     fi
     TURN_SECRET="${TURN_SECRET:-dograh_turn_secret_2026}"
-    FASTAPI_WORKERS="${FASTAPI_WORKERS:-2}"
+    FASTAPI_WORKERS=1
     dograh_validate_remote_runtime_env
     mkdir -p "$CERTS_DIR"
     if [[ ! -f "$CERTS_DIR/local.crt" || ! -f "$CERTS_DIR/local.key" ]]; then

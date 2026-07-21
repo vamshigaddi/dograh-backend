@@ -30,6 +30,8 @@ services:
     depends_on:
       dograh-init:
         condition: service_completed_successfully
+      api:
+        condition: service_started
     ports:
       - "80:80"
       - "443:443"
