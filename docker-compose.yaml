@@ -165,6 +165,15 @@ services:
     networks:
       - app-network
 
+  adminer:
+    image: adminer:latest
+    container_name: adminer
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+
 volumes:
   coturn-generated:
   nginx-generated:
