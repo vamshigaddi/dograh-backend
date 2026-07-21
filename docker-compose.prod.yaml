@@ -1,0 +1,141 @@
+# Production Docker Compose for GCP VM Deployment
+# Optimized for Supabase Cloud (Postgres/Auth) + GCS (Storage) + External Frontend (Vercel)
+
+services:
+  dograh-init:
+    image: bash:5.2
+    container_name: dograh_init
+    environment:
+      ENVIRONMENT: "${ENVIRONMENT:-production}"
+      SERVER_IP: "${SERVER_IP:-}"
+      PUBLIC_HOST: "${PUBLIC_HOST:-}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-}"
+      BACKEND_API_ENDPOINT: "${BACKEND_API_ENDPOINT:-}"
+      TURN_HOST: "${TURN_HOST:-}"
+      TURN_SECRET: "${TURN_SECRET:-}"
+      FASTAPI_WORKERS: "${FASTAPI_WORKERS:-2}"
+    volumes:
+      - ./scripts:/workspace/scripts:ro
+      - ./deploy:/workspace/deploy:ro
+      - ./certs:/certs:ro
+      - nginx-generated:/generated/nginx
+      - coturn-generated:/generated/coturn
+    command:
+      - /workspace/scripts/run_dograh_init.sh
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx_https
+    depends_on:
+      dograh-init:
+        condition: service_completed_successfully
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - nginx-generated:/etc/nginx/conf.d:ro
+      - ./certs:/etc/nginx/certs:ro
+    networks:
+      - app-network
+
+  coturn:
+    image: coturn/coturn:4.8.0
+    container_name: coturn
+    restart: unless-stopped
+    depends_on:
+      dograh-init:
+        condition: service_completed_successfully
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      - "5349:5349/udp"
+      - "5349:5349/tcp"
+      - "49152-49200:49152-49200/udp"
+    volumes:
+      - coturn-generated:/etc/coturn:ro
+    command:
+      - -c
+      - /etc/coturn/turnserver.conf
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    command: >
+      --requirepass ${REDIS_PASSWORD:-redissecret}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redissecret}", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+    networks:
+      - app-network
+
+  api:
+    image: ${REGISTRY:-us-central1-docker.pkg.dev/YOUR_PROJECT}/dograh-api:latest
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    environment:
+      ENVIRONMENT: "${ENVIRONMENT:-production}"
+      LOG_LEVEL: "${LOG_LEVEL:-INFO}"
+      ENABLE_SIGNUP: "${ENABLE_SIGNUP:-true}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-}"
+      PUBLIC_HOST: "${PUBLIC_HOST:-}"
+      BACKEND_API_ENDPOINT: "${BACKEND_API_ENDPOINT:-}"
+      
+      # Connect to Supabase Postgres
+      DATABASE_URL: "${DATABASE_URL:?DATABASE_URL environment variable is required}"
+
+      # Redis
+      REDIS_URL: "redis://:${REDIS_PASSWORD:-redissecret}@redis:6379"
+
+      # Google Cloud Storage (via S3 interop API)
+      ENABLE_AWS_S3: "true"
+      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID:-}"
+      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY:-}"
+      S3_BUCKET: "${S3_BUCKET:-}"
+      S3_REGION: "${S3_REGION:-us-central1}"
+      S3_ENDPOINT_URL: "${S3_ENDPOINT_URL:-https://storage.googleapis.com}"
+      S3_ADDRESSING_STYLE: "${S3_ADDRESSING_STYLE:-path}"
+
+      FASTAPI_WORKERS: "${FASTAPI_WORKERS:-2}"
+      FORWARDED_ALLOW_IPS: "*"
+
+      TURN_HOST: "${TURN_HOST:-}"
+      TURN_SECRET: "${TURN_SECRET:-}"
+      FORCE_TURN_RELAY: "${FORCE_TURN_RELAY:-false}"
+
+      OSS_JWT_SECRET: "${OSS_JWT_SECRET:?OSS_JWT_SECRET environment variable is required}"
+      ENABLE_TELEMETRY: "${ENABLE_TELEMETRY:-true}"
+
+    ports:
+      - "8000:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(''http://localhost:8000/api/v1/health'').read()"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - app-network
+
+volumes:
+  coturn-generated:
+  nginx-generated:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge
