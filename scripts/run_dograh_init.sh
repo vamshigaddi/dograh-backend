@@ -18,8 +18,14 @@ mkdir -p "$NGINX_OUTPUT_DIR" "$COTURN_OUTPUT_DIR"
 
 if [[ "${ENVIRONMENT:-local}" == "production" ]]; then
     dograh_validate_remote_runtime_env
-    [[ -f "$CERTS_DIR/local.crt" ]] || dograh_fail "certs/local.crt not found"
-    [[ -f "$CERTS_DIR/local.key" ]] || dograh_fail "certs/local.key not found"
+    mkdir -p "$CERTS_DIR"
+    if [[ ! -f "$CERTS_DIR/local.crt" || ! -f "$CERTS_DIR/local.key" ]]; then
+        dograh_info "Generating self-signed SSL certificates in $CERTS_DIR..."
+        openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+          -keyout "$CERTS_DIR/local.key" \
+          -out "$CERTS_DIR/local.crt" \
+          -subj "/CN=${PUBLIC_HOST:-localhost}"
+    fi
 
     export TURN_EXTERNAL_IP="$SERVER_IP"
     dograh_render_remote_nginx_conf "$WORKSPACE_DIR" "$NGINX_OUTPUT_DIR/default.conf"
